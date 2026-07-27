@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component>
+	<name>org.freedesktop.IBus.GoogleInputTools</name>
+	<description>Google Input Tools (Hindi) Engine</description>
+	<version>1.0</version>
+	<license>GPL</license>
+	<author>Google Input Tools Ubuntu Wrapper</author>
+	<exec>/usr/share/ibus-google-input-tools/ibus-google-input-tools.py</exec>
+	<textdomain>ibus-google-input-tools</textdomain>
+	<engines>
+		<engine>
+			<name>google-input-tools-hi</name>
+			<language>hi</language>
+			<license>GPL</license>
+			<author>Google Input Tools</author>
+			<icon>/usr/share/ibus-google-input-tools/icon.png</icon>
+			<layout>us</layout>
+			<longname>Google Input Tools (Hindi)</longname>
+			<description>Google Transliteration for Hindi</description>
+			<rank>99</rank>
+		</engine>
+	</engines>
+</component>
