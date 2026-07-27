@@ -190,7 +190,7 @@ import sys
 TARGET = sys.argv[1]
 with open(TARGET, "r", encoding="utf-8") as f:
     content = f.read()
-content = content.replace("longname = 'Typing Booster'", "longname = 'हिन्दी (इंडिया)'")
+content = content.replace("longname = 'Typing Booster'", "longname = 'इंडिया'")
 content = content.replace("language = 't'", "language = 'hi'")
 content = content.replace("symbol = '🚀'", "symbol = 'हि'")
 content = content.replace("symbol = '🚀\\uFE0E'", "symbol = 'हि\\uFE0E'")
@@ -221,7 +221,7 @@ for P in "${PATHS[@]}"; do
     dconf write "${P}inputmode" true
     dconf write "${P}pagesize" 5
     dconf write "${P}shownumberofcandidates" true
-    dconf write "${P}autoselectcandidate" 1
+    dconf write "${P}autoselectcandidate" 2
     dconf write "${P}candidatesdelaymilliseconds" 0
     dconf write "${P}avoidforwardkeyevent" true
     dconf write "${P}inputmodetruesymbol" "'हि'"
@@ -237,9 +237,22 @@ gsettings set org.gnome.desktop.input-sources sources "[('ibus', 'typing-booster
 gsettings set org.gnome.desktop.input-sources current 0
 log_ok "GNOME input sources configured"
 
-# ── Step 8: Rebuild IBus Cache & Restart ───────────────────────
+# ── Step 8: Install APT Hook for Persistent Patches ───────────
 echo ""
-echo "── Step 8: IBus Cache & Daemon Restart ──"
+echo "── Step 8: Install APT Hook ──"
+if [ -f "$SCRIPT_DIR/ibus-git-repatch.sh" ]; then
+    sudo cp "$SCRIPT_DIR/ibus-git-repatch.sh" /usr/local/bin/ibus-git-repatch.sh
+    sudo chmod +x /usr/local/bin/ibus-git-repatch.sh
+    sudo tee /etc/apt/apt.conf.d/99-ibus-google-input-tools > /dev/null << 'EOF'
+// Auto re-apply Google Input Tools patches after ibus-typing-booster upgrade
+DPkg::Post-Invoke { "if dpkg -l ibus-typing-booster 2>/dev/null | grep -q '^ii' && ! grep -q 'Google Input Tools' /usr/share/ibus-typing-booster/engine/hunspell_suggest.py 2>/dev/null; then /usr/local/bin/ibus-git-repatch.sh; fi"; };
+EOF
+    log_ok "APT hook installed to prevent losing patches on apt upgrade"
+fi
+
+# ── Step 9: Rebuild IBus Cache & Restart ───────────────────────
+echo ""
+echo "── Step 9: IBus Cache & Daemon Restart ──"
 sudo rm -rf /usr/share/ibus-typing-booster/engine/__pycache__/
 sudo ibus write-cache 2>/dev/null || true
 ibus write-cache 2>/dev/null || true

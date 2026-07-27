@@ -190,6 +190,7 @@ ibus restart
 ibus-google-input-tools/
 ├── setup_google_input_tools.sh   # 🚀 Master setup (run this!)
 ├── verify_setup.sh               # ✅ 22-check verification suite
+├── ibus-git-repatch.sh           # 🔄 Auto-repatch script triggered by APT
 ├── ibus-google-input-tools.py    # Standalone IBus engine (alternative)
 ├── user_dict_manager.py          # Dictionary import/export/promotion
 ├── ibus-git-dict.py              # CLI dictionary management tool
@@ -206,16 +207,18 @@ ibus-google-input-tools/
 
 ---
 
-## ⚠️ Package Update Warning
+## 🛡️ Package Update Protection (APT Hook)
 
-The patches to `hunspell_suggest.py` and `main.py` are applied to system files owned by `ibus-typing-booster`. They will be **overwritten on package updates** (`apt upgrade`).
+The setup script automatically installs an **APT Post-Invoke hook** at `/etc/apt/apt.conf.d/99-ibus-google-input-tools` and script at `/usr/local/bin/ibus-git-repatch.sh`.
 
-**To re-apply after updates:**
+Whenever `apt upgrade` updates `ibus-typing-booster`, the APT hook automatically detects that the files were overwritten and **re-applies the Google Input Tools patches instantly**.
+
+You never have to worry about system updates breaking your Hindi transliteration!
+
+To manually re-apply patches at any time:
 ```bash
-sudo bash setup_google_input_tools.sh
+sudo ibus-git-repatch.sh
 ```
-
-The script detects if patches are already applied and skips them — completely safe to re-run.
 
 ---
 
