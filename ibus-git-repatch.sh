@@ -1,106 +1,116 @@
 #!/bin/bash
 # ============================================================================
-# Auto re-patch ibus-typing-booster after apt upgrade
+# Auto re-patch ibus-typing-booster after apt upgrade (v3)
 # Location: /usr/local/bin/ibus-git-repatch.sh
 # Triggered by: /etc/apt/apt.conf.d/99-ibus-google-input-tools
 # ============================================================================
 
-HS="/usr/share/ibus-typing-booster/engine/hunspell_suggest.py"
-MAIN="/usr/share/ibus-typing-booster/engine/main.py"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENGINE_DIR="/usr/share/ibus-typing-booster/engine"
+HS="$ENGINE_DIR/hunspell_suggest.py"
+HT="$ENGINE_DIR/hunspell_table.py"
+MAIN="$ENGINE_DIR/main.py"
+GT_SRC="/home/amit/.gemini/antigravity/scratch/ibus-google-input-tools/google_transliterate.py"
+GT_DST="$ENGINE_DIR/google_transliterate.py"
 LOG="/var/log/ibus-git-repatch.log"
 
-# Only run if files exist and are NOT already patched
-[ -f "$HS" ] || exit 0
-grep -q "Google Input Tools API Integration" "$HS" 2>/dev/null && exit 0
+# Only run if files exist
+[ -f "$HT" ] || exit 0
 
-echo "$(date): ibus-typing-booster updated — re-applying Google Input Tools patches..." >> "$LOG"
+# Check if already patched (v3 marker)
+grep -q "google_transliterate" "$HT" 2>/dev/null && exit 0
 
-# Patch hunspell_suggest.py
-python3 - "$HS" << 'PYEOF'
-import sys
-TARGET = sys.argv[1]
-with open(TARGET, "r", encoding="utf-8") as f:
-    content = f.read()
-MARKER = """        # make sure input_phrase is in the internal normalization form (NFD):
-        input_phrase = unicodedata.normalize(
-            itb_util.NORMALIZATION_FORM_INTERNAL, input_phrase)
+echo "$(date): ibus-typing-booster updated — re-applying v3 Google Input Tools patches..." >> "$LOG"
 
-        suggested_words: Dict[str, Dict[str, int]] = {}"""
-REPLACEMENT = """        # make sure input_phrase is in the internal normalization form (NFD):
-        input_phrase = unicodedata.normalize(
-            itb_util.NORMALIZATION_FORM_INTERNAL, input_phrase)
-
-        # ── Google Input Tools API Integration (GIT patch) ──────────
-        try:
-            import urllib.request as _git_urlreq
-            import urllib.parse as _git_urlparse
-            import json as _git_json
-            _git_api_url = (
-                "https://inputtools.google.com/request"
-                "?text=" + _git_urlparse.quote(input_phrase)
-                + "&itc=hi-t-i0-und&num=5&cp=0&cs=1"
-                + "&ie=utf-8&oe=utf-8"
-            )
-            _git_req = _git_urlreq.Request(
-                _git_api_url,
-                headers={'User-Agent': 'Mozilla/5.0'})
-            with _git_urlreq.urlopen(_git_req, timeout=0.8) as _git_resp:
-                _git_data = _git_json.loads(
-                    _git_resp.read().decode('utf-8'))
-                if (_git_data[0] == 'SUCCESS'
-                        and len(_git_data[1]) > 0):
-                    _git_cands = list(_git_data[1][0][1])
-                    _git_ud_path = os.path.expanduser(
-                        '~/.config/ibus-google-input-tools/user_dict.json')
-                    if not hasattr(self, '_git_ud_cache'):
-                        self._git_ud_cache = {}
-                        self._git_ud_mtime = 0
-                    try:
-                        if os.path.exists(_git_ud_path):
-                            _git_mt = os.path.getmtime(_git_ud_path)
-                            if _git_mt != self._git_ud_mtime:
-                                with open(_git_ud_path, 'r', encoding='utf-8') as _git_fud:
-                                    self._git_ud_cache = _git_json.load(_git_fud)
-                                self._git_ud_mtime = _git_mt
-                    except Exception:
-                        pass
-                    _git_key = input_phrase.strip().lower()
-                    if _git_key in self._git_ud_cache:
-                        _git_uw = [item['target'] for item in self._git_ud_cache[_git_key]]
-                        for _git_w in reversed(_git_uw):
-                            if _git_w in _git_cands:
-                                _git_cands.remove(_git_w)
-                            _git_cands.insert(0, _git_w)
-                    _git_result = [
-                        (unicodedata.normalize(
-                            itb_util.NORMALIZATION_FORM_INTERNAL, w), 0)
-                        for w in _git_cands
-                    ]
-                    if _git_result:
-                        return _git_result
-        except Exception:
-            pass
-        # ── End Google Input Tools API Integration ──────────────────
-
-        suggested_words: Dict[str, Dict[str, int]] = {}"""
-if MARKER not in content:
-    print("WARN: marker not found, skipping hunspell patch"); sys.exit(0)
-with open(TARGET, "w", encoding="utf-8") as f:
-    f.write(content.replace(MARKER, REPLACEMENT, 1))
-print("OK: hunspell_suggest.py patched")
-PYEOF
-
-# Patch main.py
-if [ -f "$MAIN" ] && ! grep -q "इंडिया" "$MAIN" 2>/dev/null; then
-    sed -i "s/longname = 'Typing Booster'/longname = 'इंडिया'/g" "$MAIN"
-    sed -i "s/language = 't'/language = 'hi'/g" "$MAIN"
-    sed -i "s/symbol = '🚀'/symbol = 'हि'/g" "$MAIN"
-    sed -i "s/symbol = '🚀\x{FE0E}'/symbol = 'हि\x{FE0E}'/g" "$MAIN"
-    echo "OK: main.py patched" >> "$LOG"
+# ── Step 1: Install google_transliterate.py ──
+if [ -f "$GT_SRC" ]; then
+    cp "$GT_SRC" "$GT_DST"
+    chmod 644 "$GT_DST"
+    echo "  ✓ google_transliterate.py installed" >> "$LOG"
 fi
 
-# Clear bytecache and rebuild IBus cache
-rm -rf /usr/share/ibus-typing-booster/engine/__pycache__/
+# ── Step 2: Remove old v2 patch from hunspell_suggest.py (if present) ──
+if grep -q "Google Input Tools API Integration" "$HS" 2>/dev/null; then
+    python3 -c "
+import re
+with open('$HS', 'r', encoding='utf-8') as f:
+    content = f.read()
+content = re.sub(
+    r'\n\s*# ── Google Input Tools API Integration.*?# ── End Google Input Tools API Integration[^\n]*\n',
+    '\n', content, flags=re.DOTALL)
+with open('$HS', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('OK')
+"
+    echo "  ✓ Old v2 patch removed from hunspell_suggest.py" >> "$LOG"
+fi
+
+# ── Step 3: Patch hunspell_table.py with v3 hook ──
+if ! grep -q "google_transliterate" "$HT" 2>/dev/null; then
+    python3 -c "
+with open('$HT', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+MARKER = '            phrase_candidates = itb_util.best_candidates(phrase_frequencies)'
+INJECTION = '''            # ── Google Input Tools Integration (v3 — correct hook point) ──
+            # Uses raw Latin _typed_string (NOT Devanagari) for Google API
+            try:
+                from google_transliterate import get_transliterator as _git_get
+                _git_raw_latin = \\'\\'.join(self._typed_string)
+                if _git_raw_latin and _git_raw_latin.isascii():
+                    _git_trans = _git_get()
+                    # Try local-first (instant: user dict + API cache)
+                    _git_results = _git_trans.transliterate_local_only(_git_raw_latin)
+                    if not _git_results:
+                        # No local match — call Google API (blocking)
+                        _git_results = _git_trans.transliterate(_git_raw_latin)
+                    if _git_results:
+                        # Inject with descending high frequencies so they appear first
+                        _git_base_freq = 99.0
+                        for _git_i, _git_word in enumerate(_git_results[:8]):
+                            _git_freq = _git_base_freq - _git_i
+                            if _git_word in phrase_frequencies:
+                                phrase_frequencies[_git_word] = max(
+                                    phrase_frequencies[_git_word], _git_freq)
+                            else:
+                                phrase_frequencies[_git_word] = _git_freq
+                    else:
+                        # Trigger async fetch for next time
+                        _git_trans.transliterate_async(_git_raw_latin)
+            except Exception:
+                pass
+            # ── End Google Input Tools Integration ──────────────────────
+
+'''
+
+if MARKER in content and 'google_transliterate' not in content:
+    content = content.replace(MARKER, INJECTION + MARKER, 1)
+    with open('$HT', 'w', encoding='utf-8') as f:
+        f.write(content)
+    print('OK: hunspell_table.py patched')
+else:
+    print('SKIP: marker not found or already patched')
+"
+    echo "  ✓ hunspell_table.py patched with v3 hook" >> "$LOG"
+fi
+
+# ── Step 4: Patch main.py (UI labels) ──
+if [ -f "$MAIN" ] && ! grep -q "इंडिया" "$MAIN" 2>/dev/null; then
+    python3 -c "
+with open('$MAIN', 'r', encoding='utf-8') as f:
+    content = f.read()
+content = content.replace(\"longname = 'Typing Booster'\", \"longname = 'इंडिया'\")
+content = content.replace(\"language = 't'\", \"language = 'hi'\")
+content = content.replace(\"symbol = '🚀'\", \"symbol = 'हि'\")
+with open('$MAIN', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('OK')
+"
+    echo "  ✓ main.py patched" >> "$LOG"
+fi
+
+# ── Step 5: Clear bytecache and rebuild IBus cache ──
+rm -rf "$ENGINE_DIR/__pycache__/"
 ibus write-cache 2>/dev/null || true
 
-echo "$(date): Patches re-applied successfully." >> "$LOG"
+echo "$(date): v3 patches re-applied successfully." >> "$LOG"
