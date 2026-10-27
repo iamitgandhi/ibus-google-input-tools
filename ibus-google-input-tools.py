@@ -33,7 +33,6 @@ class GoogleInputToolsEngine(IBus.Engine):
         self.lookup_table.set_orientation(IBus.Orientation.VERTICAL)
 
         # Connect GObject signals for IBus Engine events
-        self.connect("process-key-event", self.on_process_key_event)
         self.connect("enable", self.on_enable)
         self.connect("disable", self.on_disable)
         self.connect("focus-in", self.on_focus_in)
@@ -89,18 +88,18 @@ class GoogleInputToolsEngine(IBus.Engine):
             self.hide_lookup_table()
             return
 
-        text = IBus.Text.new_with_string(self.preedit)
+        text = IBus.Text.new_from_string(self.preedit)
         self.update_preedit_text(text, len(self.preedit), True)
 
         self.candidates = self.fetch_candidates(self.preedit)
         self.lookup_table.clear()
         for cand in self.candidates:
-            self.lookup_table.append_candidate(IBus.Text.new_with_string(cand))
+            self.lookup_table.append_candidate(IBus.Text.new_from_string(cand))
 
         if self.candidates:
             self.update_lookup_table(self.lookup_table, True)
 
-    def on_process_key_event(self, engine, keyval, keycode, state):
+    def do_process_key_event(self, keyval, keycode, state):
         log_debug(f"SIGNAL: process-key-event: keyval={keyval}, keycode={keycode}, state={state}")
         is_release = bool(state & IBus.ModifierType.RELEASE_MASK)
         if is_release:
@@ -119,7 +118,7 @@ class GoogleInputToolsEngine(IBus.Engine):
                 commit_str = self.candidates[idx] if idx < len(self.candidates) else (self.candidates[0] if self.candidates else self.preedit)
                 if keyval == IBus.KEY_space:
                     commit_str += " "
-                self.commit_text(IBus.Text.new_with_string(commit_str))
+                self.commit_text(IBus.Text.new_from_string(commit_str))
                 self.preedit = ""
                 self.update_ui()
                 return True
@@ -128,7 +127,7 @@ class GoogleInputToolsEngine(IBus.Engine):
         if IBus.KEY_1 <= keyval <= IBus.KEY_9 and self.preedit:
             idx = keyval - IBus.KEY_1
             if idx < len(self.candidates):
-                self.commit_text(IBus.Text.new_with_string(self.candidates[idx] + " "))
+                self.commit_text(IBus.Text.new_from_string(self.candidates[idx] + " "))
                 self.preedit = ""
                 self.update_ui()
                 return True
@@ -154,20 +153,9 @@ GObject.type_register(GoogleInputToolsEngine)
 
 class Factory:
     def __init__(self, bus):
-        self.bus = bus
         self.factory = IBus.Factory.new(bus.get_connection())
         self.factory.add_engine("google-input-tools-hi", GoogleInputToolsEngine.__gtype__)
-        self.factory.connect("create-engine", self.create_engine)
-        self.engine_count = 0
-        log_debug("Factory initialized and connected")
-
-    def create_engine(self, factory, engine_name):
-        log_debug(f"Factory.create_engine requested for: {engine_name}")
-        if engine_name == "google-input-tools-hi":
-            self.engine_count += 1
-            path = f"/org/freedesktop/IBus/Engine/{self.engine_count}"
-            return GObject.new(GoogleInputToolsEngine, engine_name=engine_name, object_path=path)
-        return None
+        log_debug("Factory initialized")
 
 def main():
     IBus.init()
