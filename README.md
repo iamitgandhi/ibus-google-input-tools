@@ -85,6 +85,73 @@ bash verify_setup.sh
 
 ---
 
+## 🐧 Arch Linux / KDE Plasma Wayland (Standalone Engine)
+
+The Ubuntu setup script above is designed for GNOME and APT. On Arch-based distributions using KDE Plasma Wayland, you can instead use the **standalone IBus engine** (`ibus-google-input-tools.py`). This does not require patching IBus Typing Booster or installing the custom m17n scheme.
+
+The steps below were tested on **Garuda Linux with KDE Plasma Wayland**.
+
+### 1. Install dependencies
+
+```bash
+sudo pacman -S --needed ibus python-gobject git
+```
+
+### 2. Install the standalone engine
+
+```bash
+git clone https://github.com/iamitgandhi/ibus-google-input-tools.git
+cd ibus-google-input-tools
+bash install_user.sh
+```
+
+Run the installer without `sudo`.
+
+### 3. Configure KDE Wayland
+
+Go to **System Settings → Keyboard → Virtual Keyboard** and select **IBus Wayland**.
+
+Unlike the Ubuntu/GNOME setup, KDE's native Wayland integration requires `GTK_IM_MODULE` and `QT_IM_MODULE` to be unset. Do not add the environment variables from the manual Ubuntu installation instructions below.
+
+Log out and back in after making these changes.
+
+### 4. Enable Google Input Tools
+
+Open `ibus-setup` and add **Google Input Tools (Hindi)** under Input Method.
+
+Alternatively, activate it directly:
+
+```bash
+ibus engine google-input-tools-hi
+```
+
+You can verify that the engine is registered using:
+
+```bash
+ibus list-engine | grep google-input-tools-hi
+```
+
+Try typing `krishna` in Kate and pressing Space to commit the selected Hindi candidate.
+
+**Note:** This installation uses the standalone Python engine, rather than the GNOME/Typing Booster implementation. Some features and configuration options described elsewhere in this README may not apply.
+
+### Troubleshooting
+
+If the Google engine doesn't appear, check that the installer created these files:
+
+```bash
+ls ~/.local/share/ibus/component/google-input-tools-hi.xml
+ls ~/.local/share/ibus-google-input-tools/ibus-google-input-tools.py
+```
+
+You can also verify the Python IBus bindings:
+
+```bash
+/usr/bin/python3 -c "import gi; gi.require_version('IBus', '1.0'); from gi.repository import IBus; print('IBus OK')"
+```
+
+---
+
 ## ⌨️ How to Use
 
 1. **Switch to Hindi**: Press `Super+Space`
